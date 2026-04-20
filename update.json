@@ -1,7 +1,7 @@
 {
   "versionCode": 3,
   "versionName": "3.0",
-  "isMandatory": true,
+  "isMandatory": false,
   "apkUrl": "https://fiersclem.github.io/acjmperf/acjmperf_v2.0.apk",
   "releaseNotes": "Ajout du réservoir AV pour le DR400."
 }
