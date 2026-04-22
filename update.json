@@ -1,7 +1,7 @@
 {
   "versionCode": 4,
   "versionName": "4.0",
-  "isMandatory": true,
+  "isMandatory": false,
   "apkUrl": "https://fiersclem.github.io/acjmperf/acjmperf_v4.0.apk",
   "releaseNotes": "Responsive."
 }
