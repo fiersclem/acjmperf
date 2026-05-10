@@ -1,7 +1,7 @@
 {
-  "versionCode": 5.1,
+  "versionCode": 6,
   "versionName": "5.1",
   "isMandatory": false,
   "apkUrl": "https://fiersclem.github.io/acjmperf/acjmperf_v5.1.apk",
-  "releaseNotes": "correction arrondi."
+  "releaseNotes": "ajout pesee SG."
 }
