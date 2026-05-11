@@ -1,7 +1,7 @@
 {
-  "versionCode": 7,
-  "versionName": "5.2",
+  "versionCode": 1,
+  "versionName": "1.0",
   "isMandatory": false,
-  "apkUrl": "https://fiersclem.github.io/acjmperf/acjmperf_v5.2.apk",
-  "releaseNotes": "Correction XS."
+  "apkUrl": "https://fiersclem.github.io/acjmperf/acjmperf_v1.0.apk",
+  "releaseNotes": "Correction bugs"
 }
