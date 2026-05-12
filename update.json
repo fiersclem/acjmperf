@@ -1,7 +1,7 @@
 {
-  "versionCode": 1,
-  "versionName": "1.0",
-  "isMandatory": false,
-  "apkUrl": "https://fiersclem.github.io/acjmperf/acjmperf_v1.0.apk",
-  "releaseNotes": "Correction bugs"
+  "versionCode": 2,
+  "versionName": "1.1",
+  "isMandatory": true,
+  "apkUrl": "https://fiersclem.github.io/acjmperf/acjmperf_v1.1.apk",
+  "releaseNotes": "Correction Barre Navigation"
 }
