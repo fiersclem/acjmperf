@@ -29,7 +29,7 @@
             <h2 id="totalDevices">0</h2>
         </div>
         <div class="card">
-            <p>Actifs (24h)</p>
+            <p>Actifs (En direct)</p>
             <h2 id="activeDevices">0</h2>
         </div>
     </div>
@@ -51,7 +51,8 @@
 
     <script>
         // --- À REMPLACER PAR TES CLÉS SUPABASE ---
-        const SUPABASE_URL = "https://lhrqnmirngrgiqzofqyr.supabase.co/rest/v1/devices?on_conflict=id";
+        // L'URL a été corrigée pour LIRE les données de la plus récente à la plus ancienne
+        const SUPABASE_URL = "https://lhrqnmirngrgiqzofqyr.supabase.co/rest/v1/devices?select=*&order=last_ping.desc";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxocnFubWlybmdyZ2lxem9mcXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1OTQwNDIsImV4cCI6MjA5NDE3MDA0Mn0.bX1C1ilsQGHfnKLV9iXi4DbbSsfknRdRY6I_WpdDZiQ";
 
         async function fetchStats() {
@@ -74,18 +75,33 @@
                     const lastPing = new Date(device.last_ping);
                     const createdAt = new Date(device.created_at);
                     
-                    // Calcul de la différence en heures
-                    const diffHours = Math.abs(now - lastPing) / 36e5;
+                    // Calcul de la différence en secondes
+                    const diffSeconds = Math.floor((now - lastPing) / 1000);
                     
                     let statusColor = "red";
                     let statusText = "Inactif";
                     
-                    if (diffHours < 1) { // Moins de 1h
-                        statusColor = "green"; statusText = "En ligne";
+                    if (diffSeconds <= 20) { 
+                        // Moins de 20s = Vert
+                        statusColor = "green"; 
+                        statusText = "En direct";
                         activeCount++;
-                    } else if (diffHours < 24) { // Moins de 24h
-                        statusColor = "orange"; statusText = "Aujourd'hui";
-                        activeCount++;
+                    } else if (diffSeconds <= 86400) { 
+                        // Moins de 24h = Orange
+                        statusColor = "orange"; 
+                        statusText = "Hors ligne";
+                    }
+
+                    // On rend l'affichage du temps plus joli
+                    let timeAgoText = "";
+                    if (diffSeconds < 60) {
+                        timeAgoText = `Il y a ${diffSeconds} sec`;
+                    } else if (diffSeconds < 3600) {
+                        timeAgoText = `Il y a ${Math.floor(diffSeconds / 60)} min`;
+                    } else if (diffSeconds < 86400) {
+                        timeAgoText = `Il y a ${Math.floor(diffSeconds / 3600)} h`;
+                    } else {
+                        timeAgoText = lastPing.toLocaleDateString('fr-FR');
                     }
 
                     const tr = document.createElement('tr');
@@ -93,7 +109,7 @@
                         <td><span class="dot ${statusColor}"></span>${statusText}</td>
                         <td>${device.device_model}</td>
                         <td>v${device.app_version}</td>
-                        <td>${lastPing.toLocaleString('fr-FR')}</td>
+                        <td>${timeAgoText}</td>
                         <td>${createdAt.toLocaleDateString('fr-FR')}</td>
                     `;
                     tbody.appendChild(tr);
@@ -109,6 +125,9 @@
 
         // Lance le chargement immédiatement
         fetchStats();
+        
+        // Rafraîchir les données automatiquement toutes les 10 secondes (10000 millisecondes)
+        setInterval(fetchStats, 5000);
     </script>
 </body>
 </html>
