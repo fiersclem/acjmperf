@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACJM Perf - Télémétrie</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; padding: 20px; }
+        h1 { color: #103056; }
+        .dashboard-cards { display: flex; gap: 20px; margin-bottom: 20px; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); flex: 1; text-align: center; }
+        .card h2 { margin: 0; font-size: 36px; color: #00A6CE; }
+        table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #103056; color: white; }
+        .dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+        .green { background-color: #4CAF50; }
+        .orange { background-color: #FF9800; }
+        .red { background-color: #F44336; }
+    </style>
+</head>
+<body>
+
+    <h1>📊 Flotte ACJM Perf</h1>
+
+    <div class="dashboard-cards">
+        <div class="card">
+            <p>Appareils Totaux</p>
+            <h2 id="totalDevices">0</h2>
+        </div>
+        <div class="card">
+            <p>Actifs (24h)</p>
+            <h2 id="activeDevices">0</h2>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Statut</th>
+                <th>Modèle</th>
+                <th>Version App</th>
+                <th>Dernier Ping</th>
+                <th>1ère Installation</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            <tr><td colspan="5">Chargement des données...</td></tr>
+        </tbody>
+    </table>
+
+    <script>
+        // --- À REMPLACER PAR TES CLÉS SUPABASE ---
+        const SUPABASE_URL = "https://lhrqnmirngrgiqzofqyr.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxocnFubWlybmdyZ2lxem9mcXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1OTQwNDIsImV4cCI6MjA5NDE3MDA0Mn0.bX1C1ilsQGHfnKLV9iXi4DbbSsfknRdRY6I_WpdDZiQ";
+
+        async function fetchStats() {
+            try {
+                const response = await fetch(SUPABASE_URL, {
+                    headers: {
+                        "apikey": SUPABASE_ANON_KEY,
+                        "Authorization": "Bearer " + SUPABASE_ANON_KEY
+                    }
+                });
+                const data = await response.json();
+                
+                const tbody = document.getElementById('tableBody');
+                tbody.innerHTML = '';
+                
+                let activeCount = 0;
+                const now = new Date();
+
+                data.forEach(device => {
+                    const lastPing = new Date(device.last_ping);
+                    const createdAt = new Date(device.created_at);
+                    
+                    // Calcul de la différence en heures
+                    const diffHours = Math.abs(now - lastPing) / 36e5;
+                    
+                    let statusColor = "red";
+                    let statusText = "Inactif";
+                    
+                    if (diffHours < 1) { // Moins de 1h
+                        statusColor = "green"; statusText = "En ligne";
+                        activeCount++;
+                    } else if (diffHours < 24) { // Moins de 24h
+                        statusColor = "orange"; statusText = "Aujourd'hui";
+                        activeCount++;
+                    }
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><span class="dot ${statusColor}"></span>${statusText}</td>
+                        <td>${device.device_model}</td>
+                        <td>v${device.app_version}</td>
+                        <td>${lastPing.toLocaleString('fr-FR')}</td>
+                        <td>${createdAt.toLocaleDateString('fr-FR')}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                document.getElementById('totalDevices').innerText = data.length;
+                document.getElementById('activeDevices').innerText = activeCount;
+
+            } catch (error) {
+                console.error("Erreur de chargement", error);
+            }
+        }
+
+        // Lance le chargement immédiatement
+        fetchStats();
+    </script>
+</body>
+</html>
