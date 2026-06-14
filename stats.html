@@ -180,7 +180,8 @@
         @media (max-width: 768px) {
             body { padding: 16px; }
             th:nth-child(5), td:nth-child(5),
-            th:nth-child(6), td:nth-child(6) { display: none; }
+            th:nth-child(6), td:nth-child(6),
+            th:nth-child(7), td:nth-child(7) { display: none; }
         }
     </style>
 </head>
@@ -220,7 +221,7 @@
 </div>
 
 <div class="version-banner" id="versionBanner">
-    Version de l'application : <em>Calcul en cours...</em>
+    Version serveur : <em>chargement de update.json…</em>
 </div>
 
 <div class="table-wrap">
@@ -243,13 +244,17 @@
 </div>
 
 <script>
-    // ── Config Supabase ──────────────────────────────────────────────────────
+    // ── Config ──────────────────────────────────────────────────────────────
+    // CORRECTION : URL du repo GitHub Pages
+    const UPDATE_JSON = "https://fiersclem.github.io/acjmperf/update.json"; 
+    
     const SUPABASE_BASE_URL = "https://lhrqnmirngrgiqzofqyr.supabase.co/rest/v1/devices";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxocnFubWlybmdyZ2lxem9mcXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1OTQwNDIsImV4cCI6MjA5NDE3MDA0Mn0.bX1C1ilsQGHfnKLV9iXi4DbbSsfknRdRY6I_WpdDZiQ";
     const REFRESH_SECS = 10;
 
     // ── État ────────────────────────────────────────────────────────────────
-    let latestAppVersion = 0;
+    let latestVersionCode = 0;
+    let latestVersionName = null;
     let countdownVal = REFRESH_SECS;
     let countdownInterval;
 
@@ -268,7 +273,21 @@
         return id.length > 8 ? id.slice(0, 8) + '…' : id;
     }
 
-    // ── Fetch devices ────────────────────────────────────────────────────────
+    // ── Fetch update.json (Version de référence) ─────────────────────────────
+    async function fetchUpdateInfo() {
+        try {
+            // Le "?_=" + Date.now() empêche le navigateur de mettre le fichier en cache
+            const r = await fetch(UPDATE_JSON + "?_=" + Date.now());
+            if (!r.ok) return;
+            const d = await r.json();
+            latestVersionCode = d.versionCode || 0;
+            latestVersionName = d.versionName || null;
+        } catch (_) {
+            console.error("Impossible de lire update.json sur GitHub");
+        }
+    }
+
+    // ── Fetch devices (Supabase) ─────────────────────────────────────────────
     async function fetchDevices() {
         try {
             const response = await fetch(`${SUPABASE_BASE_URL}?select=*&order=last_ping.desc`, {
@@ -288,6 +307,9 @@
     // ── Rendu ────────────────────────────────────────────────────────────────
     async function refresh() {
         try {
+            // 1. On va chercher la vraie dernière version sur ton GitHub
+            await fetchUpdateInfo();
+            // 2. On va chercher les appareils sur Supabase
             const devices = await fetchDevices();
 
             const now = Date.now();
@@ -297,59 +319,56 @@
 
             if (devices.length === 0) {
                 tbody.innerHTML = '<tr class="state-row"><td colspan="7">Aucun appareil enregistré pour l\'instant.</td></tr>';
-                return;
-            }
+            } else {
+                devices.forEach(d => {
+                    const diffSec   = Math.floor((now - new Date(d.last_ping)) / 1000);
+                    const isActive  = diffSec <= 20;
+                    const isOffline = !isActive && diffSec <= 86400; // 24 heures
+                    
+                    // L'appareil a besoin d'une MAJ si sa version est différente de latestVersionName (lu sur GitHub)
+                    const appVersionStr = d.app_version || "0";
+                    const needsUpd  = latestVersionName && appVersionStr !== latestVersionName;
 
-            // Détection automatique de la version la plus récente dans la flotte
-            latestAppVersion = Math.max(...devices.map(d => parseFloat(d.app_version) || 0));
+                    if (isActive)  nActive++;
+                    if (isOffline) nOffline++;
+                    if (needsUpd)  nUpdate++;
 
-            devices.forEach(d => {
-                const diffSec   = Math.floor((now - new Date(d.last_ping)) / 1000);
-                const isActive  = diffSec <= 20;
-                const isOffline = !isActive && diffSec <= 86400; // 24 heures
-                
-                const currentVersion = parseFloat(d.app_version) || 0;
-                const needsUpd  = currentVersion < latestAppVersion;
+                    const bClass = isActive  ? 'badge-live'
+                                 : isOffline ? 'badge-offline'
+                                             : 'badge-inactive';
+                    const bLabel = isActive  ? 'En direct'
+                                 : isOffline ? 'Hors ligne'
+                                             : 'Inactif';
 
-                if (isActive)  nActive++;
-                if (isOffline) nOffline++;
-                if (needsUpd)  nUpdate++;
+                    const vClass = needsUpd ? 'vtag outdated' : 'vtag';
+                    const vIcon  = needsUpd ? ' ⬆️' : '';
 
-                const bClass = isActive  ? 'badge-live'
-                             : isOffline ? 'badge-offline'
-                                         : 'badge-inactive';
-                const bLabel = isActive  ? 'En direct'
-                             : isOffline ? 'Hors ligne'
-                                         : 'Inactif';
+                    const firstInstall = new Date(d.created_at).toLocaleDateString('fr-FR', {
+                        day: '2-digit', month: 'short', year: 'numeric'
+                    });
 
-                const vClass = needsUpd ? 'vtag outdated' : 'vtag';
-                const vIcon  = needsUpd ? ' ⬆️' : '';
-
-                const firstInstall = new Date(d.created_at).toLocaleDateString('fr-FR', {
-                    day: '2-digit', month: 'short', year: 'numeric'
+                    const customName = d.custom_name || 'Pilote Inconnu';
+                    const tr = document.createElement('tr');
+                    
+                    tr.innerHTML = `
+                        <td><span class="badge ${bClass}"><span class="dot"></span>${bLabel}</span></td>
+                        <td>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <strong>${customName}</strong>
+                                <button onclick="renameDevice('${d.id}', '${customName.replace(/'/g, "\\'")}')" 
+                                        style="background:none; border:none; cursor:pointer; font-size:14px; opacity:0.6; padding:2px;" 
+                                        title="Renommer">✏️</button>
+                            </div>
+                        </td>
+                        <td>${d.device_model || '—'}</td>
+                        <td><span class="${vClass}">v${appVersionStr}${vIcon}</span></td>
+                        <td>${timeAgo(d.last_ping)}</td>
+                        <td>${firstInstall}</td>
+                        <td><span class="device-id">${shortId(d.id)}</span></td>
+                    `;
+                    tbody.appendChild(tr);
                 });
-
-                const customName = d.custom_name || 'Pilote Inconnu';
-                const tr = document.createElement('tr');
-                
-                tr.innerHTML = `
-                    <td><span class="badge ${bClass}"><span class="dot"></span>${bLabel}</span></td>
-                    <td>
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <strong>${customName}</strong>
-                            <button onclick="renameDevice('${d.id}', '${customName.replace(/'/g, "\\'")}')" 
-                                    style="background:none; border:none; cursor:pointer; font-size:14px; opacity:0.6; padding:2px;" 
-                                    title="Renommer">✏️</button>
-                        </div>
-                    </td>
-                    <td>${d.device_model || '—'}</td>
-                    <td><span class="${vClass}">v${d.app_version || '?'}${vIcon}</span></td>
-                    <td>${timeAgo(d.last_ping)}</td>
-                    <td>${firstInstall}</td>
-                    <td><span class="device-id">${shortId(d.id)}</span></td>
-                `;
-                tbody.appendChild(tr);
-            });
+            }
 
             // Mise à jour des cartes
             document.getElementById('cTotal').textContent   = devices.length;
@@ -365,13 +384,17 @@
 
             // Mise à jour de la bannière de version
             const banner = document.getElementById('versionBanner');
-            banner.innerHTML = `Dernière version détectée : <strong>v${latestAppVersion}</strong>` +
-                (nUpdate > 0 
-                    ? ` — <span style="color:#c62828">⬆️ ${nUpdate} appareil${nUpdate > 1 ? 's nécessitent' : ' nécessite'} une mise à jour</span>`
-                    : ` — <span style="color:#2e7d32">✅ Tous les appareils actifs sont à jour</span>`);
+            if (latestVersionName) {
+                banner.innerHTML = `Version officielle sur GitHub : <strong>v${latestVersionName}</strong> <code>code ${latestVersionCode}</code>` +
+                    (nUpdate > 0 
+                        ? ` — <span style="color:#c62828">⬆️ ${nUpdate} appareil${nUpdate > 1 ? 's ne sont pas à jour' : ' n\\'est pas à jour'}</span>`
+                        : ` — <span style="color:#2e7d32">✅ Toute la flotte est à jour</span>`);
+            } else {
+                banner.innerHTML = `Version officielle sur GitHub : <em style="color:#aaa">Impossible de lire update.json</em>`;
+            }
 
         } catch (e) {
-            document.getElementById('subtitle').textContent = '⚠️ Erreur de connexion à Supabase';
+            document.getElementById('subtitle').textContent = '⚠️ Erreur de connexion';
         }
     }
 
@@ -404,14 +427,13 @@
         if (newName === null || newName.trim() === defaultText) return;
 
         try {
-            // Requête PATCH pour mettre à jour une ligne spécifique dans Supabase
             const r = await fetch(`${SUPABASE_BASE_URL}?id=eq.${deviceId}`, {
                 method: "PATCH",
                 headers: {
                     "apikey": SUPABASE_ANON_KEY,
                     "Authorization": "Bearer " + SUPABASE_ANON_KEY,
                     "Content-Type": "application/json",
-                    "Prefer": "return=minimal" // Ne renvoie pas toute la base de données en réponse
+                    "Prefer": "return=minimal"
                 },
                 body: JSON.stringify({ custom_name: newName.trim() })
             });
@@ -419,7 +441,7 @@
             if (r.ok) {
                 manualRefresh();
             } else {
-                alert("Erreur lors de l'enregistrement dans Supabase. As-tu bien créé la colonne 'custom_name' ?");
+                alert("Erreur lors de l'enregistrement dans Supabase.");
             }
         } catch (e) {
             console.error(e);
