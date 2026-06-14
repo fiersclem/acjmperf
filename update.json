@@ -1,7 +1,7 @@
 {
-  "versionCode": 5,
-  "versionName": "1.4",
+  "versionCode": 6,
+  "versionName": "1.5",
   "isMandatory": true,
-  "apkUrl": "https://fiersclem.github.io/acjmperf/acjmperf_v1.4.apk",
+  "apkUrl": "https://fiersclem.github.io/acjmperf/acjmperf_v1.5.apk",
   "releaseNotes": "correction masse et centrage"
 }
