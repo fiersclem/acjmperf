@@ -246,9 +246,9 @@
 <script>
     // ── Config ──────────────────────────────────────────────────────────────
     // CORRECTION : URL du repo GitHub Pages
-    const UPDATE_JSON = "https://fiersclem.github.io/acjmperf/update.json"; 
+    const UPDATE_JSON = "https://fiersclem.github.io/acjmperf/update.json";  //https://fiersclem.github.io/acjmperf/stats.html
     
-    const SUPABASE_BASE_URL = "https://lhrqnmirngrgiqzofqyr.supabase.co/rest/v1/devices";
+    const SUPABASE_BASE_URL = "https://lhrqnmirngrgiqzofqyr.supabase.co/rest/v1/devices?select=*&order=last_ping.desc";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxocnFubWlybmdyZ2lxem9mcXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1OTQwNDIsImV4cCI6MjA5NDE3MDA0Mn0.bX1C1ilsQGHfnKLV9iXi4DbbSsfknRdRY6I_WpdDZiQ";
     const REFRESH_SECS = 10;
 
