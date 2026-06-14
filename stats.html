@@ -180,8 +180,7 @@
         @media (max-width: 768px) {
             body { padding: 16px; }
             th:nth-child(5), td:nth-child(5),
-            th:nth-child(6), td:nth-child(6),
-            th:nth-child(7), td:nth-child(7) { display: none; }
+            th:nth-child(6), td:nth-child(6) { display: none; }
         }
     </style>
 </head>
@@ -221,7 +220,7 @@
 </div>
 
 <div class="version-banner" id="versionBanner">
-    Version serveur : <em>chargement de update.json…</em>
+    Version de l'application : <em>Calcul en cours...</em>
 </div>
 
 <div class="table-wrap">
@@ -244,23 +243,18 @@
 </div>
 
 <script>
-    // ── Config ──────────────────────────────────────────────────────────────
-    // Utilisation du lien "RAW" direct de GitHub pour contourner tout blocage CORS/Pages
-    const UPDATE_JSON = "https://raw.githubusercontent.com/fiersclem/acjmperf/main/update.json"; 
-    
+    // ── Config Supabase ──────────────────────────────────────────────────────
     const SUPABASE_BASE_URL = "https://lhrqnmirngrgiqzofqyr.supabase.co/rest/v1/devices";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxocnFubWlybmdyZ2lxem9mcXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1OTQwNDIsImV4cCI6MjA5NDE3MDA0Mn0.bX1C1ilsQGHfnKLV9iXi4DbbSsfknRdRY6I_WpdDZiQ";
     const REFRESH_SECS = 10;
 
     // ── État ────────────────────────────────────────────────────────────────
-    let latestVersionCode = 0;
-    let latestVersionName = null;
+    let latestAppVersion = 0;
     let countdownVal = REFRESH_SECS;
     let countdownInterval;
 
     // ── Utilitaires ─────────────────────────────────────────────────────────
     function timeAgo(dateStr) {
-        if (!dateStr) return 'Inconnu';
         const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
         if (diff < 20)    return "À l'instant";
         if (diff < 60)    return `Il y a ${diff} s`;
@@ -274,22 +268,7 @@
         return id.length > 8 ? id.slice(0, 8) + '…' : id;
     }
 
-    // ── Fetch update.json (Version de référence sur GitHub) ──────────────────
-    async function fetchUpdateInfo() {
-        try {
-            // cache: "no-store" force le navigateur à télécharger la toute dernière version sans utiliser le cache
-            const r = await fetch(UPDATE_JSON, { cache: "no-store" });
-            if (!r.ok) throw new Error("Fichier introuvable");
-            const d = await r.json();
-            latestVersionCode = d.versionCode || 0;
-            latestVersionName = d.versionName || null;
-        } catch (e) {
-            console.error("Erreur de lecture update.json :", e);
-            latestVersionName = null; // On remet à zéro en cas d'échec
-        }
-    }
-
-    // ── Fetch devices (Supabase) ─────────────────────────────────────────────
+    // ── Fetch devices ────────────────────────────────────────────────────────
     async function fetchDevices() {
         try {
             const response = await fetch(`${SUPABASE_BASE_URL}?select=*&order=last_ping.desc`, {
@@ -302,109 +281,97 @@
             return await response.json();
         } catch (e) {
             console.error("Erreur de lecture Supabase :", e);
-            return null; // Renvoie null pour signaler un crash
+            return [];
         }
     }
 
     // ── Rendu ────────────────────────────────────────────────────────────────
     async function refresh() {
         try {
-            // On lance les requêtes
-            await fetchUpdateInfo();
             const devices = await fetchDevices();
-
-            const tbody = document.getElementById('tbody');
-            tbody.innerHTML = '';
-
-            // Gestion de l'erreur Supabase (si null est renvoyé)
-            if (devices === null) {
-                tbody.innerHTML = '<tr class="state-row"><td colspan="7" style="color:red;">⚠️ Erreur de connexion à Supabase.</td></tr>';
-                return;
-            }
 
             const now = Date.now();
             let nActive = 0, nOffline = 0, nUpdate = 0;
+            const tbody = document.getElementById('tbody');
+            tbody.innerHTML = '';
 
             if (devices.length === 0) {
                 tbody.innerHTML = '<tr class="state-row"><td colspan="7">Aucun appareil enregistré pour l\'instant.</td></tr>';
-            } else {
-                devices.forEach(d => {
-                    const diffSec   = Math.floor((now - new Date(d.last_ping)) / 1000);
-                    const isActive  = diffSec <= 20;
-                    const isOffline = !isActive && diffSec <= 86400; // 24 heures
-                    
-                    // Comparaison : l'appareil n'est pas à jour si sa version diffère de celle du GitHub
-                    const appVersionStr = d.app_version || "0";
-                    const needsUpd  = latestVersionName && (appVersionStr !== latestVersionName);
-
-                    if (isActive)  nActive++;
-                    if (isOffline) nOffline++;
-                    if (needsUpd)  nUpdate++;
-
-                    const bClass = isActive  ? 'badge-live'
-                                 : isOffline ? 'badge-offline'
-                                             : 'badge-inactive';
-                    const bLabel = isActive  ? 'En direct'
-                                 : isOffline ? 'Hors ligne'
-                                             : 'Inactif';
-
-                    const vClass = needsUpd ? 'vtag outdated' : 'vtag';
-                    const vIcon  = needsUpd ? ' ⬆️' : '';
-
-                    // Si 'created_at' est vide, on prend 'last_ping', sinon "Inconnu"
-                    const dateSource = d.created_at || d.last_ping;
-                    const firstInstall = dateSource ? new Date(dateSource).toLocaleDateString('fr-FR', {
-                        day: '2-digit', month: 'short', year: 'numeric'
-                    }) : "—";
-
-                    const customName = d.custom_name || 'Pilote Inconnu';
-                    const tr = document.createElement('tr');
-                    
-                    tr.innerHTML = `
-                        <td><span class="badge ${bClass}"><span class="dot"></span>${bLabel}</span></td>
-                        <td>
-                            <div style="display:flex; align-items:center; gap:8px;">
-                                <strong>${customName}</strong>
-                                <button onclick="renameDevice('${d.id}', '${customName.replace(/'/g, "\\'")}')" 
-                                        style="background:none; border:none; cursor:pointer; font-size:14px; opacity:0.6; padding:2px;" 
-                                        title="Renommer">✏️</button>
-                            </div>
-                        </td>
-                        <td>${d.device_model || '—'}</td>
-                        <td><span class="${vClass}">v${appVersionStr}${vIcon}</span></td>
-                        <td>${timeAgo(d.last_ping)}</td>
-                        <td>${firstInstall}</td>
-                        <td><span class="device-id">${shortId(d.id)}</span></td>
-                    `;
-                    tbody.appendChild(tr);
-                });
+                return;
             }
 
-            // Mise à jour des compteurs
+            // Détection automatique de la version la plus récente dans la flotte
+            latestAppVersion = Math.max(...devices.map(d => parseFloat(d.app_version) || 0));
+
+            devices.forEach(d => {
+                const diffSec   = Math.floor((now - new Date(d.last_ping)) / 1000);
+                const isActive  = diffSec <= 20;
+                const isOffline = !isActive && diffSec <= 86400; // 24 heures
+                
+                const currentVersion = parseFloat(d.app_version) || 0;
+                const needsUpd  = currentVersion < latestAppVersion;
+
+                if (isActive)  nActive++;
+                if (isOffline) nOffline++;
+                if (needsUpd)  nUpdate++;
+
+                const bClass = isActive  ? 'badge-live'
+                             : isOffline ? 'badge-offline'
+                                         : 'badge-inactive';
+                const bLabel = isActive  ? 'En direct'
+                             : isOffline ? 'Hors ligne'
+                                         : 'Inactif';
+
+                const vClass = needsUpd ? 'vtag outdated' : 'vtag';
+                const vIcon  = needsUpd ? ' ⬆️' : '';
+
+                const firstInstall = new Date(d.created_at).toLocaleDateString('fr-FR', {
+                    day: '2-digit', month: 'short', year: 'numeric'
+                });
+
+                const customName = d.custom_name || 'Pilote Inconnu';
+                const tr = document.createElement('tr');
+                
+                tr.innerHTML = `
+                    <td><span class="badge ${bClass}"><span class="dot"></span>${bLabel}</span></td>
+                    <td>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <strong>${customName}</strong>
+                            <button onclick="renameDevice('${d.id}', '${customName.replace(/'/g, "\\'")}')" 
+                                    style="background:none; border:none; cursor:pointer; font-size:14px; opacity:0.6; padding:2px;" 
+                                    title="Renommer">✏️</button>
+                        </div>
+                    </td>
+                    <td>${d.device_model || '—'}</td>
+                    <td><span class="${vClass}">v${d.app_version || '?'}${vIcon}</span></td>
+                    <td>${timeAgo(d.last_ping)}</td>
+                    <td>${firstInstall}</td>
+                    <td><span class="device-id">${shortId(d.id)}</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Mise à jour des cartes
             document.getElementById('cTotal').textContent   = devices.length;
             document.getElementById('cActive').textContent  = nActive;
             document.getElementById('cOffline').textContent = nOffline;
             document.getElementById('cUpdate').textContent  = nUpdate;
 
-            // Mise à jour de l'en-tête (Heure d'actualisation)
+            // Mise à jour de l'en-tête
             const time = new Date().toLocaleTimeString('fr-FR');
             document.getElementById('lastRefresh').textContent = time;
             document.getElementById('subtitle').textContent = 
                 `${devices.length} appareil${devices.length > 1 ? 's' : ''} surveillés — actualisé à ${time}`;
 
-            // Mise à jour de la bannière de version GitHub
+            // Mise à jour de la bannière de version
             const banner = document.getElementById('versionBanner');
-            if (latestVersionName) {
-                banner.innerHTML = `Version officielle sur GitHub : <strong>v${latestVersionName}</strong> <code>code ${latestVersionCode}</code>` +
-                    (nUpdate > 0 
-                        ? ` — <span style="color:#c62828">⬆️ ${nUpdate} appareil${nUpdate > 1 ? 's ne sont pas à jour' : ' n\\'est pas à jour'}</span>`
-                        : ` — <span style="color:#2e7d32">✅ Toute la flotte est à jour</span>`);
-            } else {
-                banner.innerHTML = `Version officielle sur GitHub : <em style="color:#aaa">Impossible de lire update.json</em>`;
-            }
+            banner.innerHTML = `Dernière version détectée : <strong>v${latestAppVersion}</strong>` +
+                (nUpdate > 0 
+                    ? ` — <span style="color:#c62828">⬆️ ${nUpdate} appareil${nUpdate > 1 ? 's nécessitent' : ' nécessite'} une mise à jour</span>`
+                    : ` — <span style="color:#2e7d32">✅ Tous les appareils actifs sont à jour</span>`);
 
         } catch (e) {
-            console.error("Erreur générale :", e);
+            document.getElementById('subtitle').textContent = '⚠️ Erreur de connexion à Supabase';
         }
     }
 
@@ -437,13 +404,14 @@
         if (newName === null || newName.trim() === defaultText) return;
 
         try {
+            // Requête PATCH pour mettre à jour une ligne spécifique dans Supabase
             const r = await fetch(`${SUPABASE_BASE_URL}?id=eq.${deviceId}`, {
                 method: "PATCH",
                 headers: {
                     "apikey": SUPABASE_ANON_KEY,
                     "Authorization": "Bearer " + SUPABASE_ANON_KEY,
                     "Content-Type": "application/json",
-                    "Prefer": "return=minimal"
+                    "Prefer": "return=minimal" // Ne renvoie pas toute la base de données en réponse
                 },
                 body: JSON.stringify({ custom_name: newName.trim() })
             });
@@ -451,7 +419,7 @@
             if (r.ok) {
                 manualRefresh();
             } else {
-                alert("Erreur lors de l'enregistrement dans Supabase.");
+                alert("Erreur lors de l'enregistrement dans Supabase. As-tu bien créé la colonne 'custom_name' ?");
             }
         } catch (e) {
             console.error(e);
