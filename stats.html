@@ -245,10 +245,10 @@
 
 <script>
     // ── Config ──────────────────────────────────────────────────────────────
-    // CORRECTION : URL du repo GitHub Pages
-    const UPDATE_JSON = "https://fiersclem.github.io/acjmperf/update.json";  //https://fiersclem.github.io/acjmperf/stats.html
+    // Utilisation du lien "RAW" direct de GitHub pour contourner tout blocage CORS/Pages
+    const UPDATE_JSON = "https://raw.githubusercontent.com/fiersclem/acjmperf/main/update.json"; 
     
-    const SUPABASE_URL = "https://lhrqnmirngrgiqzofqyr.supabase.co/rest/v1/devices?select=*&order=last_ping.desc";
+    const SUPABASE_BASE_URL = "https://lhrqnmirngrgiqzofqyr.supabase.co/rest/v1/devices";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxocnFubWlybmdyZ2lxem9mcXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1OTQwNDIsImV4cCI6MjA5NDE3MDA0Mn0.bX1C1ilsQGHfnKLV9iXi4DbbSsfknRdRY6I_WpdDZiQ";
     const REFRESH_SECS = 10;
 
@@ -260,6 +260,7 @@
 
     // ── Utilitaires ─────────────────────────────────────────────────────────
     function timeAgo(dateStr) {
+        if (!dateStr) return 'Inconnu';
         const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
         if (diff < 20)    return "À l'instant";
         if (diff < 60)    return `Il y a ${diff} s`;
@@ -273,17 +274,18 @@
         return id.length > 8 ? id.slice(0, 8) + '…' : id;
     }
 
-    // ── Fetch update.json (Version de référence) ─────────────────────────────
+    // ── Fetch update.json (Version de référence sur GitHub) ──────────────────
     async function fetchUpdateInfo() {
         try {
-            // Le "?_=" + Date.now() empêche le navigateur de mettre le fichier en cache
-            const r = await fetch(UPDATE_JSON + "?_=" + Date.now());
-            if (!r.ok) return;
+            // cache: "no-store" force le navigateur à télécharger la toute dernière version sans utiliser le cache
+            const r = await fetch(UPDATE_JSON, { cache: "no-store" });
+            if (!r.ok) throw new Error("Fichier introuvable");
             const d = await r.json();
             latestVersionCode = d.versionCode || 0;
             latestVersionName = d.versionName || null;
-        } catch (_) {
-            console.error("Impossible de lire update.json sur GitHub");
+        } catch (e) {
+            console.error("Erreur de lecture update.json :", e);
+            latestVersionName = null; // On remet à zéro en cas d'échec
         }
     }
 
@@ -300,22 +302,28 @@
             return await response.json();
         } catch (e) {
             console.error("Erreur de lecture Supabase :", e);
-            return [];
+            return null; // Renvoie null pour signaler un crash
         }
     }
 
     // ── Rendu ────────────────────────────────────────────────────────────────
     async function refresh() {
         try {
-            // 1. On va chercher la vraie dernière version sur ton GitHub
+            // On lance les requêtes
             await fetchUpdateInfo();
-            // 2. On va chercher les appareils sur Supabase
             const devices = await fetchDevices();
+
+            const tbody = document.getElementById('tbody');
+            tbody.innerHTML = '';
+
+            // Gestion de l'erreur Supabase (si null est renvoyé)
+            if (devices === null) {
+                tbody.innerHTML = '<tr class="state-row"><td colspan="7" style="color:red;">⚠️ Erreur de connexion à Supabase.</td></tr>';
+                return;
+            }
 
             const now = Date.now();
             let nActive = 0, nOffline = 0, nUpdate = 0;
-            const tbody = document.getElementById('tbody');
-            tbody.innerHTML = '';
 
             if (devices.length === 0) {
                 tbody.innerHTML = '<tr class="state-row"><td colspan="7">Aucun appareil enregistré pour l\'instant.</td></tr>';
@@ -325,9 +333,9 @@
                     const isActive  = diffSec <= 20;
                     const isOffline = !isActive && diffSec <= 86400; // 24 heures
                     
-                    // L'appareil a besoin d'une MAJ si sa version est différente de latestVersionName (lu sur GitHub)
+                    // Comparaison : l'appareil n'est pas à jour si sa version diffère de celle du GitHub
                     const appVersionStr = d.app_version || "0";
-                    const needsUpd  = latestVersionName && appVersionStr !== latestVersionName;
+                    const needsUpd  = latestVersionName && (appVersionStr !== latestVersionName);
 
                     if (isActive)  nActive++;
                     if (isOffline) nOffline++;
@@ -343,9 +351,11 @@
                     const vClass = needsUpd ? 'vtag outdated' : 'vtag';
                     const vIcon  = needsUpd ? ' ⬆️' : '';
 
-                    const firstInstall = new Date(d.created_at).toLocaleDateString('fr-FR', {
+                    // Si 'created_at' est vide, on prend 'last_ping', sinon "Inconnu"
+                    const dateSource = d.created_at || d.last_ping;
+                    const firstInstall = dateSource ? new Date(dateSource).toLocaleDateString('fr-FR', {
                         day: '2-digit', month: 'short', year: 'numeric'
-                    });
+                    }) : "—";
 
                     const customName = d.custom_name || 'Pilote Inconnu';
                     const tr = document.createElement('tr');
@@ -370,19 +380,19 @@
                 });
             }
 
-            // Mise à jour des cartes
+            // Mise à jour des compteurs
             document.getElementById('cTotal').textContent   = devices.length;
             document.getElementById('cActive').textContent  = nActive;
             document.getElementById('cOffline').textContent = nOffline;
             document.getElementById('cUpdate').textContent  = nUpdate;
 
-            // Mise à jour de l'en-tête
+            // Mise à jour de l'en-tête (Heure d'actualisation)
             const time = new Date().toLocaleTimeString('fr-FR');
             document.getElementById('lastRefresh').textContent = time;
             document.getElementById('subtitle').textContent = 
                 `${devices.length} appareil${devices.length > 1 ? 's' : ''} surveillés — actualisé à ${time}`;
 
-            // Mise à jour de la bannière de version
+            // Mise à jour de la bannière de version GitHub
             const banner = document.getElementById('versionBanner');
             if (latestVersionName) {
                 banner.innerHTML = `Version officielle sur GitHub : <strong>v${latestVersionName}</strong> <code>code ${latestVersionCode}</code>` +
@@ -394,7 +404,7 @@
             }
 
         } catch (e) {
-            document.getElementById('subtitle').textContent = '⚠️ Erreur de connexion';
+            console.error("Erreur générale :", e);
         }
     }
 
