@@ -364,7 +364,9 @@
                     });
 
                     const customName = d.custom_name || 'Sans nom';
-                    const deviceId   = d.device_id || null;
+                    
+                    // CORRECTION ICI : La base Supabase utilise "id", pas "device_id"
+                    const deviceId   = d.id || null; 
 
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
@@ -444,8 +446,9 @@
         if (newName === null || newName.trim() === defaultText) return;
 
         try {
+            // CORRECTION ICI AUSSI : On cherche sur la colonne "id"
             const r = await fetch(
-                `${SUPABASE_BASE_URL}?device_id=eq.${encodeURIComponent(deviceId)}`,
+                `${SUPABASE_BASE_URL}?id=eq.${encodeURIComponent(deviceId)}`,
                 {
                     method: 'PATCH',
                     headers: {
