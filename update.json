@@ -1,7 +1,7 @@
 {
-  "versionCode": 7,
-  "versionName": "1.6",
+  "versionCode": 8,
+  "versionName": "1.7",
   "isMandatory": true,
-  "apkUrl": "https://fiersclem.github.io/acjmperf/acjmperf_v1.6.apk",
-  "releaseNotes": "correction performances DA - KK, ajout diclaimer, ajout champ masse"
+  "apkUrl": "https://fiersclem.github.io/acjmperf/acjmperf_v1.7.apk",
+  "releaseNotes": "ajout fonction chrono vol"
 }
