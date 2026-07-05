@@ -1,7 +1,7 @@
 {
-  "versionCode": 8,
-  "versionName": "1.7",
+  "versionCode": 9,
+  "versionName": "1.8",
   "isMandatory": true,
-  "apkUrl": "https://fiersclem.github.io/acjmperf/acjmperf_v1.7.apk",
+  "apkUrl": "https://fiersclem.github.io/acjmperf/acjmperf_v1.8.apk",
   "releaseNotes": "ajout fonction chrono vol"
 }
