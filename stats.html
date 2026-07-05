@@ -275,10 +275,10 @@
         return id.length > 10 ? id.slice(0, 10) + '…' : id;
     }
 
-    // Compare deux chaînes de version (ex. "1.5" < "1.6")
+    // Compare deux chaînes de version en forçant le format texte puis nombre
     function compareVersions(v1, v2) {
-        const p1 = (v1 || '0').split('.').map(Number);
-        const p2 = (v2 || '0').split('.').map(Number);
+        const p1 = (String(v1) || '0').split('.').map(Number);
+        const p2 = (String(v2) || '0').split('.').map(Number);
         for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
             const a = p1[i] || 0, b = p2[i] || 0;
             if (a < b) return -1;
@@ -290,12 +290,13 @@
     // ── Fetch update.json depuis GitHub ──────────────────────────────────────
     async function fetchUpdateInfo() {
         try {
-            // Cache-bust pour toujours avoir la dernière version
-            const r = await fetch(UPDATE_JSON + "?_=" + Date.now());
+            // cache: 'no-store' est ajouté pour forcer le téléchargement et ignorer le cache tenace de Github raw
+            const r = await fetch(UPDATE_JSON + "?_=" + Date.now(), { cache: 'no-store' });
             if (!r.ok) return;
             const d = await r.json();
-            latestVersionCode = d.versionCode || 0;
-            latestVersionName = d.versionName || null;
+            // On force la conversion en nombre entier pour éviter tout risque "10" < "8"
+            latestVersionCode = parseInt(d.versionCode, 10) || 0;
+            latestVersionName = String(d.versionName) || null;
         } catch (_) {}
     }
 
@@ -309,7 +310,7 @@
                 }
             });
             if (!response.ok) return [];
-            return await response.json(); // déjà trié par last_ping DESC
+            return await response.json(); 
         } catch (e) {
             console.error("Erreur Supabase :", e);
             return [];
@@ -335,12 +336,17 @@
                     const isActive = diffSec <= 20;
                     const isOffline = !isActive && diffSec <= 86400;
 
-                    // Comparaison version : version_code en priorité, sinon comparaison de chaînes
                     let needsUpd = false;
+                    
                     if (latestVersionCode > 0) {
-                        if (d.version_code != null) {
-                            needsUpd = d.version_code < latestVersionCode;
+                        // On force la conversion de d.version_code en entier
+                        const deviceVc = parseInt(d.version_code, 10);
+                        
+                        if (!isNaN(deviceVc)) {
+                            // Comparaison mathématique stricte (ex: 8 < 10)
+                            needsUpd = deviceVc < latestVersionCode;
                         } else if (latestVersionName && d.app_version) {
+                            // Fallback sur le texte si le code est absent
                             needsUpd = compareVersions(d.app_version, latestVersionName) < 0;
                         }
                     }
@@ -364,8 +370,6 @@
                     });
 
                     const customName = d.custom_name || 'Sans nom';
-                    
-                    // CORRECTION ICI : La base Supabase utilise "id", pas "device_id"
                     const deviceId   = d.id || null; 
 
                     const tr = document.createElement('tr');
@@ -446,7 +450,6 @@
         if (newName === null || newName.trim() === defaultText) return;
 
         try {
-            // CORRECTION ICI AUSSI : On cherche sur la colonne "id"
             const r = await fetch(
                 `${SUPABASE_BASE_URL}?id=eq.${encodeURIComponent(deviceId)}`,
                 {
